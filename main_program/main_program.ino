@@ -6,6 +6,7 @@
 #include <Adafruit_Sensor.h>  // BNO055
 #include <Adafruit_BNO055.h>  // BNO055
 #include <utility/imumaths.h> // BNO055
+#include <Servo.h>
 
 // Sensors Variables Declaration
 int TEAM_ID = 1007;
