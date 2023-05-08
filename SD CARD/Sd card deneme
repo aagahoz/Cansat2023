@@ -1,0 +1,41 @@
+#include <SD.h>
+#include <SPI.h>
+
+const int chipSelectPin = 10; // SD kartın bağlı olduğu pin
+
+void setup() {
+  Serial.begin(9600);
+
+  // SD kartı başlat
+  if (!SD.begin(chipSelectPin)) {
+    Serial.println("SD kart başlatılamadı!");
+    return;
+  }
+
+  Serial.println("SD kart başarıyla başlatıldı.");
+
+  // Dosyayı oluştur ve aç
+  File dataFile = SD.open("data.txt", FILE_WRITE);
+
+  // Dosyanın başarıyla açıldığından emin ol
+  if (dataFile) {
+    Serial.println("data.txt dosyası oluşturuldu ve açıldı.");
+
+    // Dosyaya veri yazdır
+    dataFile.println("Merhaba, SD kart!");
+    dataFile.println("Bu bir test verisidir.");
+    dataFile.println("Yazdırılan zaman: " + String(millis()) + " ms");
+
+    // Dosyayı kapat
+    dataFile.close();
+
+    Serial.println("Veri dosyaya yazıldı.");
+  } else {
+    // Dosya açılamadıysa hata mesajını yazdır
+    Serial.println("data.txt dosyası açılamadı.");
+  }
+}
+
+void loop() {
+  // Devam eden bir işlem yok
+}
