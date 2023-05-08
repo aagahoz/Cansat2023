@@ -150,12 +150,12 @@ void ComminicationTimer_ISR()
             MODE= "S";  // Real pressure sending but when ACTIVE command comes, it will send fake datas.
         }
         
-        else if (incoming_data == "CMD,1007,SIM,ACTIVE")
+        else if (incoming_data == "CMD,1007,SIM,ACTIVE" && MODE=="S")
         {
             TELEMETRY_STATE = 0; // Take fake datas with SIMP commands 
         }
 
-        else if (incoming_data == "CMD,1007,SIM,DISABLE")
+        else if (incoming_data == "CMD,1007,SIM,DISABLE" && MODE=="S")
         {
             MODE= "F";; // Real pressure sending.
             TELEMETRY_STATE = 1;
