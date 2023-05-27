@@ -73,8 +73,8 @@
 // RTC
 #include <RTClib.h>
 // IMU
-#include <Adafruit_MPU6050.h>
-#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h> 
+#include <utility/imumaths.h>
 // GPS
 #include <HardwareSerial.h>
 // SD Card
@@ -126,7 +126,8 @@ struct TelemetryStruct {
 // Kütüphaneler
 Adafruit_BMP280 bmp;
 RTC_DS1307 newRTC;
-Adafruit_MPU6050 mpu;
+Adafruit_BNO055 bno = Adafruit_BNO055(55);
+
 HardwareSerial SerialGPS(1);
 Servo servo;
 
@@ -158,11 +159,11 @@ void TaskRTC(void* pvParameters) {
 
     if (rtc_find_state && rtc_running_state) {
       DateTime now = newRTC.now();
-      TelemetryObject.gps_time = String(now.day()) + "," + String(now.month()) + "," + String(now.year()) + ";" + String(now.hour()) + "," + String(now.minute()) + "," + String(now.second());
+      TelemetryObject.gps_time = String(now.day()) + "," + String(now.month()) + "," + String(now.year()) + "/" + String(now.hour()) + "," + String(now.minute()) + "," + String(now.second());
       Serial.println("RTC--> " + TelemetryObject.gps_time);
     } else {
       Serial.println("RTC--> RTC ERROR!");
-      TelemetryObject.gps_time = ",,;,,";
+      TelemetryObject.gps_time = ",,/,,";
     }
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
@@ -235,15 +236,16 @@ void TaskIMU(void* pvParameters) {
   (void)pvParameters;
 
   for (;;) {
-    sensors_event_t a, g, temp;
-    mpu.getEvent(&a, &g, &temp);
+    sensors_event_t event;
+    bno.getEvent(&event);
 
-    float gyroX = g.gyro.x;
-    float gyroY = g.gyro.y;
-    float gyroZ = g.gyro.z;
-    float accelX = a.acceleration.x;
-    float accelY = a.acceleration.y;
-    float accelZ = a.acceleration.z;
+    float gyroX = event.orientation.x;
+    float gyroY = event.orientation.y;
+    float gyroZ = event.orientation.z;
+    float accelX = event.acceleration.x;
+    float accelY = event.acceleration.y;
+    float accelZ = event.acceleration.z;
+    
 
     String data = "4- IMU--> Rotation X: " + String(gyroX) + ", Y: " + String(gyroY) + ", Z: " + String(gyroZ) + " rad/s, Acceleration X: " + String(accelX) + ", Y: " + String(accelY) + ", Z: " + String(accelZ) + " m/s^2";
     Serial.println(data);
@@ -297,7 +299,7 @@ void TaskDcControl(void* pvParameters) {
 
     /////........
 
-    Serial.print("7- DC State: ");
+    Serial.println("7- DC State: ");
     vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
@@ -345,7 +347,7 @@ void TaskTelemeryLoggerSdCard(void* pvParameters) {
 
       String tempSdCardData = XBee_Payload_Telemetry + '\n';
 
-      appendFile(SD, "/data.txt", tempSdCardData.c_str());
+      appendFile(SD, "/data.csv", tempSdCardData.c_str());
       Serial.println("Success SD Card Telemetry Write");
     } else {
       Serial.println("Failed SD Card Telemetry Write");
@@ -366,11 +368,11 @@ void setup() {
   delay(500);
 
   unsigned status = bmp.begin(0x76);
-
+  
 
   bool rtc_find_state = newRTC.begin();
   if (!rtc_find_state) {
-    Serial.println("Couldn't find RTC");
+    Serial.println("RTC Couldn't find");
   }
 
   bool rtc_running_state = newRTC.isrunning();
@@ -378,70 +380,15 @@ void setup() {
     Serial.println("RTC is NOT running!");
   }
 
-  if (!mpu.begin()) {
-    Serial.println("Failed to find MPU6050 chip");
-    delay(1000);
-  }
+  if(!bno.begin())
+    {
+      /* There was a problem detecting the BNO055 ... check your connections */
+      Serial.print("BNO055 Couldn't find ");
 
-  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
-  Serial.print("Accelerometer range set to: ");
-  switch (mpu.getAccelerometerRange()) {
-    case MPU6050_RANGE_2_G:
-      Serial.println("+-2G");
-      break;
-    case MPU6050_RANGE_4_G:
-      Serial.println("+-4G");
-      break;
-    case MPU6050_RANGE_8_G:
-      Serial.println("+-8G");
-      break;
-    case MPU6050_RANGE_16_G:
-      Serial.println("+-16G");
-      break;
-  }
+    }
+  delay(1000);
+  bno.setExtCrystalUse(true);
 
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  Serial.print("Gyro range set to: ");
-  switch (mpu.getGyroRange()) {
-    case MPU6050_RANGE_250_DEG:
-      Serial.println("+- 250 deg/s");
-      break;
-    case MPU6050_RANGE_500_DEG:
-      Serial.println("+- 500 deg/s");
-      break;
-    case MPU6050_RANGE_1000_DEG:
-      Serial.println("+- 1000 deg/s");
-      break;
-    case MPU6050_RANGE_2000_DEG:
-      Serial.println("+- 2000 deg/s");
-      break;
-  }
-
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-  Serial.print("Filter bandwidth set to: ");
-  switch (mpu.getFilterBandwidth()) {
-    case MPU6050_BAND_260_HZ:
-      Serial.println("260 Hz");
-      break;
-    case MPU6050_BAND_184_HZ:
-      Serial.println("184 Hz");
-      break;
-    case MPU6050_BAND_94_HZ:
-      Serial.println("94 Hz");
-      break;
-    case MPU6050_BAND_44_HZ:
-      Serial.println("44 Hz");
-      break;
-    case MPU6050_BAND_21_HZ:
-      Serial.println("21 Hz");
-      break;
-    case MPU6050_BAND_10_HZ:
-      Serial.println("10 Hz");
-      break;
-    case MPU6050_BAND_5_HZ:
-      Serial.println("5 Hz");
-      break;
-  }
 
   // Initialize SD card
   SD.begin(SD_CS);
@@ -464,14 +411,14 @@ void setup() {
       is_sd_card_initialize = false;  // init failed
     }
   }
-  // If the data.txt file doesn't exist
+  // If the data.csv file doesn't exist
   // Create a file on the SD card and write the data labels
   if (is_sd_card_initialize == true) {
-    File file = SD.open("/data.txt");
+    File file = SD.open("/data.csv");
     if (!file) {
       Serial.println("File doens't exist");
       Serial.println("Creating file...");
-      writeFile(SD, "/data.txt", "\r\n");
+      writeFile(SD, "/data.csv", "\r\n");
     } else {
       Serial.println("File already exists");
     }
