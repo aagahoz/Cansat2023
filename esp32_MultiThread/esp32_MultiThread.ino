@@ -136,6 +136,9 @@ Servo servo;
 TelemetryStruct TelemetryObject;
 String XBee_Incoming_Packet[10];
 
+int getCommaCount(String str);
+void parseTelemetryObject(String str, TelemetryStruct &TelemetryObject);
+
 bool ServoState = false;
 bool DcState = false;
 const int servoPin = 25;
@@ -159,11 +162,11 @@ void TaskRTC(void* pvParameters) {
 
     if (rtc_find_state && rtc_running_state) {
       DateTime now = newRTC.now();
-      TelemetryObject.gps_time = String(now.day()) + "," + String(now.month()) + "," + String(now.year()) + "/" + String(now.hour()) + "," + String(now.minute()) + "," + String(now.second());
-      Serial.println("RTC--> " + TelemetryObject.gps_time);
+      TelemetryObject.mission_time =String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second());
+      Serial.println("RTC--> " + TelemetryObject.mission_time);
     } else {
       Serial.println("RTC--> RTC ERROR!");
-      TelemetryObject.gps_time = ",,/,,";
+      TelemetryObject.mission_time = "::";
     }
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
@@ -174,8 +177,8 @@ void TaskBMP280(void* pvParameters) {
 
   for (;;) {
     float temperature = bmp.readTemperature();
-    float pressure = bmp.readPressure();
-    float altitude = bmp.readAltitude(1017.5);
+    float pressure = bmp.readPressure() / 100.0F ;
+    float altitude = bmp.readAltitude(1013.25);
 
     TelemetryObject.temp = String(temperature);
     TelemetryObject.pressure = String(pressure);
@@ -190,7 +193,7 @@ void TaskXBeeSend(void* pvParameters) {
   (void)pvParameters;
 
   for (;;) {
-    XBee_Payload_Telemetry = TelemetryObject.team_id + "," + TelemetryObject.mission_time + "," + TelemetryObject.packet_count + "," + TelemetryObject.mode + "," + TelemetryObject.state + "," + TelemetryObject.altitude + "," + TelemetryObject.hs_deployed + "," + TelemetryObject.pc_deployed + "," + TelemetryObject.mast_raised + "," + TelemetryObject.temp + "," + TelemetryObject.pressure + "," + TelemetryObject.volt + "," + TelemetryObject.gps_time + "," + TelemetryObject.gps_altitude + "," + TelemetryObject.gps_latitude + "," + TelemetryObject.gps_longitude + "," + TelemetryObject.gps_sats + "," + TelemetryObject.tilt_x + "," + TelemetryObject.tilt_y + "," + TelemetryObject.cmd_echo + "," + TelemetryObject.accelX + "," + TelemetryObject.accelY + "," + TelemetryObject.accelZ;
+    XBee_Payload_Telemetry = TelemetryObject.team_id + "," + TelemetryObject.mission_time + "," + TelemetryObject.packet_count + "," + TelemetryObject.mode + "," + TelemetryObject.state + "," + TelemetryObject.altitude + "," + TelemetryObject.hs_deployed + "," + TelemetryObject.pc_deployed + "," + TelemetryObject.mast_raised + "," + TelemetryObject.temp + "," + TelemetryObject.volt + "," + TelemetryObject.pressure + "," + TelemetryObject.gps_time + "," + TelemetryObject.gps_altitude + "," + TelemetryObject.gps_latitude + "," + TelemetryObject.gps_longitude + "," + TelemetryObject.gps_sats + "," + TelemetryObject.tilt_x + "," + TelemetryObject.tilt_y + "," + TelemetryObject.cmd_echo + "," + TelemetryObject.accelX + "," + TelemetryObject.accelY + "," + TelemetryObject.accelZ;
 
 
 
@@ -268,10 +271,35 @@ void TaskGPS(void* pvParameters) {
 
     if (SerialGPS.available()) {                         // GPS modülünden veri var mı kontrol et
       String message = SerialGPS.readStringUntil('\n');  // Gelen veriyi oku
-      Serial.println(message);
+      Serial.println("GPS avalaible:  " + message);
       if (message.substring(0, 6) == "$GNGGA") {  // Eğer GNGGA mesajıysa
+        Serial.println("GPS GNGGA avalaible");
 
-        Serial.println("Virgul falan filan");
+        int virgulCount = getCommaCount(message);
+        Serial.println("Virgül Sayısı:   " + virgulCount);
+
+            if (virgulCount == 14)
+            {
+                parseTelemetryObject(message, TelemetryObject);
+                Serial.print("Latitude: ");
+                Serial.println(TelemetryObject.gps_latitude);
+                //Serial.print("Latitude Direction: ");
+                // Serial.println(TelemetryObject.LATUTE_DIR);
+                Serial.print("Longitude: ");
+                Serial.println(TelemetryObject.gps_longitude);
+                // Serial.print("Longitude Direction: ");
+                // Serial.println(TelemetryObject.LONGTITUDE_DIR);
+                Serial.print("GPS Time: ");
+                Serial.println(TelemetryObject.gps_time);
+                // Serial.print("Fix Quality: ");
+                // Serial.println(TelemetryObject.FIX_QUALITY);
+                Serial.print("Number of Satellites: ");
+                Serial.println(TelemetryObject.gps_sats);
+                // Serial.print("Horizontal Dilution: ");
+                // Serial.println(TelemetryObject.HORIZANTAL_DILUTION);
+                Serial.print("Altitude: ");
+                Serial.println(TelemetryObject.gps_altitude);
+            }
       }
     }
     Serial.println("5- GPS DataS --> ");
@@ -548,4 +576,59 @@ void writeFile(fs::FS& fs, const char* path, const char* message) {
     Serial.println("Write failed");
   }
   file.close();
+}
+
+int getCommaCount(String str){
+    int sayac = 0;
+    for (int i = 0; i < str.length(); i++)
+    {
+        if (str.charAt(i) == ',')
+        {
+            sayac++;
+        }
+    }
+    return sayac;
+}
+
+void parseTelemetryObject(String str, TelemetryStruct &TelemetryObject){
+    int pos = 0;
+    for (int i = 0; i < 10; i++)
+    {
+        int nextPos = str.indexOf(',', pos);
+        String valueStr = str.substring(pos, nextPos);
+        pos = nextPos + 1;
+        switch (i)
+        {
+        case 0:
+            //strcpy(TelemetryObject.SENTENCEIDENTIFIER, valueStr.c_str());
+            break;
+        case 1:
+            TelemetryObject.gps_time = valueStr.toFloat();
+            break;
+        case 2:
+            TelemetryObject.gps_latitude = valueStr.toFloat();
+            break;
+        case 3:
+            //TelemetryObject.LATUTE_DIR = valueStr.charAt(0);
+            break;
+        case 4:
+            TelemetryObject.gps_longitude = valueStr.toFloat();
+            break;
+        case 5:
+            //TelemetryObject.LONGTITUDE_DIR = valueStr.charAt(0);
+            break;
+        case 6:
+            //TelemetryObject.FIX_QUALITY = valueStr.charAt(0);
+            break;
+        case 7:
+            TelemetryObject.gps_sats = valueStr.toInt();
+            break;
+        case 8:
+            //TelemetryObject.HORIZANTAL_DILUTION = valueStr.toFloat();
+            break;
+        case 9:
+            TelemetryObject.gps_altitude = valueStr.toFloat();
+            break;
+        }
+    }
 }
